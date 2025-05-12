@@ -1,5 +1,3 @@
-# GOOGLE_API_KEY = "AIzaSyBQgNFqOG01MHtZcCgPdvHZTtBoVjID2IY" 
-
 import streamlit as st
 import google.generativeai as genai
 from io import BytesIO
@@ -164,7 +162,7 @@ translations = {
         "mn": "Монголын домгийн талаар, ялангуяа '{topic}' сэдвийн хүрээнд боловсролын ойлголт өгнө үү. Мэдээллийг тодорхой бүтэцтэйгээр гаргана уу. Зөвхөн Монголоор хариулна уу.",
     },
     "prompt_get_story_titles": {
-        "en": "Provide exactly 6 distinct titles of FAMOUS and AUTHENTIC Mongolian mythological stories (e.g., \'Erkhii Mergen\', \'Khukhuu Namjil\', \'Tsartsaa Namjil\', \'Geser\', \'Boldoggui Bor Uvgun\'). These MUST be real, well-known stories from Mongolian folklore. For each title, provide ONE short, engaging sentence introducing it. Format each entry as 'Title: Engaging sentence', one per line. **ABSOLUTELY NO introduction/explanation before the list.** Just the 6 titles and sentences. Provide the output ONLY in English.",
+        "en": "Provide exactly 6 distinct titles of FAMOUS and AUTHENTIC Mongolian mythological stories (e.g., \'Erkhii Mergen\', \'Khukhuu Namjil\', \'Tsartsaa Namjil\', \'Geser Khan\'). These MUST be real, well-known stories from Mongolian folklore. For each title, provide ONE short, engaging sentence introducing it. Format each entry as 'Title: Engaging sentence', one per line. **ABSOLUTELY NO introduction/explanation before the list.** Just the 6 titles and sentences. Provide the output ONLY in English.",
         "mn": "Монголын АЛДАРТАЙ, ЖИНХЭНЭ домгийн бодит түүхүүдийн (Жишээ нь: \'Эрхий Мэргэн\', \'Хөхөө Намжил\', \'Царцаа Намжил\', \'Гэсэр\', \'Болдоггүй Бор Өвгөн\') яг 6 ялгаатай гарчиг болон тухайн түүхийг унших сонирхол төрүүлэхүйц НЭГ богино өгүүлбэрийг гаргаж өгнө үү. Эдгээр нь Монголын домог, аман зохиолын БОДИТ, ОЛОНД ТАНИГДСАН түүхүүд байх ёстой. Мэдээллийг мөр бүрт 'Гарчиг: Сонирхолтой өгүүлбэр' гэсэн хэлбэрээр жагсаана уу. **ЖАГСААЛТЫН ӨМНӨ ЯМАР Ч ОРШИЛ, ТАЙЛБАР ОРУУЛЖ БОЛОХГҮЙ.** Зөвхөн 6 гарчиг, 6 өгүүлбэр л байна. Зөвхөн Монголоор хариулна уу."
     },
     "prompt_translate_text": {
@@ -1182,7 +1180,7 @@ def main():
             # System instruction: Strongly focused on Mongolian Mythology perspective
             system_instruction = (
                 f"You are an expert assistant specializing *exclusively* in Mongolian Mythology. "
-                f"Your primary function is to answer questions *only* through the lens of Mongolian myths, legends, and folklore. "
+                f"Your primary function is to answer questions only through the lens of Mongolian myths, legends, and folklore. "
                 f"You are a helpful and polite assistant, you are simple and easy to understand. Do not overshare.  "
                 f"**Strictly adhere to the instruction in the user prompt to respond in the user's language and provide answers based *solely* on Mongolian mythology.** " 
                 f"The overall UI language is currently set to {t('lang_english' if lang_code == 'en' else 'lang_mongolian', lang_code)}."
