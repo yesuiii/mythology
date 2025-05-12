@@ -321,11 +321,9 @@ def t(key, lang_code, **kwargs):
                 print(f"Warning: Translation key '{key}' not found for language '{lang_code}', falling back to English.")
             return template.format(**kwargs)
         except KeyError:
-            # If key is not found even in English, return an error indicator
             print(f"ERROR: Translation key '{key}' not found for any supported language.")
             return f"[MISSING_KEY: {key}]"
     except Exception as e:
-        # Catch any other formatting errors
         print(f"Error during translation formatting for key '{key}', lang '{lang_code}': {e}")
         return f"[TRANSLATION_ERROR: {key}]"
 def query_brave(query: str) -> str:
@@ -348,17 +346,15 @@ def is_error_message(text):
     """Checks if the text likely contains one of our defined error messages or patterns."""
     if not isinstance(text, str):
         return False
-    # List of error indicators (case-insensitive check below)
     error_keys = [
         "error_gemini_api", "error_tts_api", "error_empty_response",
         "error_unexpected_stop", "[MISSING_KEY:", "[TRANSLATION_ERROR:",
         "AI Generation Error:", "Could not fetch", "Failed to initialize",
         "Received an empty response", "generation stopped unexpectedly",
         "Translation failed", "API Error", "Error generating",
-        "Model not initialized", "check API key", "AI Алдаа", # Added Mongolian error key
-        "AI Error" # Generic AI error
+        "Model not initialized", "check API key", "AI Алдаа", 
+        "AI Error"
     ]
-    # Perform a case-insensitive check
     text_lower = text.lower()
     return any(key.lower() in text_lower for key in error_keys)
 
@@ -368,21 +364,15 @@ def get_gemini_response(prompt_text, generation_config=None):
     Handles potential errors like missing API key or API call failures.
     Returns the generated text (str) or an error message string.
     """
-    # Get the current UI language for error messages
-    ui_lang_code = st.session_state.get('lang_code', 'en') # Use 'lang_code' from session state
-
-    # Check if the model was initialized successfully
+    ui_lang_code = st.session_state.get('lang_code', 'en') 
     if model is None:
-         # Use the specific error key for model not initialized
          return t("error_model_not_initialized", ui_lang_code)
 
-    # Ensure prompt is a string
     if not isinstance(prompt_text, str):
         print(f"Error: Invalid input type for get_gemini_response. Expected str, got {type(prompt_text)}")
         return t("error_gemini_api", ui_lang_code, error="Invalid prompt type")
 
     try:
-        # Define safety settings for content generation
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
@@ -390,22 +380,18 @@ def get_gemini_response(prompt_text, generation_config=None):
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
         ]
 
-        # --- Call the Gemini API ---
-        # print(f"--- Sending Prompt to Gemini ---\n{prompt_text}\n-----------------------------") # DEBUG: Log the prompt
         response = model.generate_content(
-            prompt_text, # Send the prompt string directly
+            prompt_text, 
             generation_config=generation_config,
             safety_settings=safety_settings
         )
-        # print(f"--- Received Response from Gemini ---\n{response}\n-----------------------------") # DEBUG: Log the full response
 
         # --- Process the API Response ---
         full_text = ""
         finish_reason = "UNKNOWN"
-        safety_ratings_str = "N/A" # For logging/debugging
+        safety_ratings_str = "N/A" 
 
         try:
-            # Safely extract text and metadata from the response
             if response.candidates:
                 candidate = response.candidates[0]
                 finish_reason = candidate.finish_reason.name if hasattr(candidate.finish_reason, 'name') else str(candidate.finish_reason)
@@ -414,11 +400,8 @@ def get_gemini_response(prompt_text, generation_config=None):
 
                 if candidate.content and candidate.content.parts:
                     full_text = "".join(part.text for part in candidate.content.parts if hasattr(part, 'text')).strip()
-
-            # Fallback: Try accessing response.text directly if candidate parsing fails or yields no text
             if not full_text and hasattr(response, 'text') and response.text:
                  full_text = response.text.strip()
-                 # Try to get finish reason again if possible and not already set
                  if finish_reason == "UNKNOWN" and response.candidates:
                       candidate = response.candidates[0]
                       finish_reason = candidate.finish_reason.name if hasattr(candidate.finish_reason, 'name') else str(candidate.finish_reason)
@@ -428,44 +411,31 @@ def get_gemini_response(prompt_text, generation_config=None):
 
         except (IndexError, AttributeError, KeyError, StopIteration) as e:
             print(f"Error accessing candidate details: {e}. Response: {response}")
-            # Try response.text as a final fallback if parsing failed
             if not full_text and hasattr(response, 'text') and response.text:
                  full_text = response.text.strip()
-
-        # --- Handle Response Based on Content and Finish Reason ---
         if full_text:
-            # Check if generation stopped unexpectedly despite having text
-            if finish_reason not in ["STOP", "MAX_TOKENS", "UNKNOWN"]: # UNKNOWN might occur if parsing failed but text exists
+            if finish_reason not in ["STOP", "MAX_TOKENS", "UNKNOWN"]:
                 details = f"Reason: {finish_reason}, Safety: {safety_ratings_str}"
                 print(f"Warning: Gemini generation stopped unexpectedly ({finish_reason}) but returned text. Details: {details}")
-                # Optionally display a warning in the UI, but return text anyway
-                # st.warning(t("error_unexpected_stop", ui_lang_code, details=details))
-            # print(f"--- Gemini Response Text ---\n{full_text}\n--------------------------") # DEBUG: Log successful text
-            return full_text # Return the generated text
+            return full_text
 
         else:
-            # No text content generated
             details = f"Reason: {finish_reason}, Safety: {safety_ratings_str}"
-            print(f"Gemini returned empty response or stopped. Details: {details}") # Log empty response details
+            print(f"Gemini returned empty response or stopped. Details: {details}")
             if finish_reason not in ["STOP", "MAX_TOKENS", "UNKNOWN"]:
-                # Stopped due to safety or other non-standard reasons
                 st.warning(t("error_unexpected_stop", ui_lang_code, details=details))
                 return t("error_unexpected_stop", ui_lang_code, details=details)
             else:
-                # Stopped normally (STOP) or hit token limit but produced no text
                 st.warning(t("error_empty_response", ui_lang_code))
                 return t("error_empty_response", ui_lang_code)
-
-    # Handle potential errors during the API call itself (e.g., network, auth)
+                
     except genai.types.generation_types.BlockedPromptException as bpe:
         st.error(f"AI Error: Prompt was blocked. Details: {bpe}")
         print(f"Gemini API Call Error: Prompt Blocked - {bpe}")
         return t("error_gemini_api", ui_lang_code, error="Prompt blocked by safety filters")
     except Exception as e:
-        # Catch broader API call errors
         st.error(t("error_gemini_api", ui_lang_code, error=str(e)))
         print(f"Gemini API Call Error: {e}")
-        # Log the traceback for detailed debugging if needed
         import traceback
         traceback.print_exc()
         return t("error_gemini_api", ui_lang_code, error=str(e))
@@ -473,18 +443,14 @@ def get_gemini_response(prompt_text, generation_config=None):
 
 def translate_text(text, source_lang_code, target_lang_code):
     """Translates text using the Gemini API."""
-    # Get the current UI language for fetching language names correctly
-    ui_lang_code = st.session_state.get('lang_code', 'en') # Use 'lang_code'
+    ui_lang_code = st.session_state.get('lang_code', 'en') 
 
-    # FIX: Use the correct keys "lang_english" and "lang_mongolian"
     source_lang_key = "lang_english" if source_lang_code == "en" else "lang_mongolian"
     target_lang_key = "lang_english" if target_lang_code == "en" else "lang_mongolian"
 
-    # Get the display names for source and target languages in the current UI language
     source_lang_name = t(source_lang_key, ui_lang_code)
     target_lang_name = t(target_lang_key, ui_lang_code)
 
-    # Get the translation prompt template in the current UI language
     prompt = t("prompt_translate_text", ui_lang_code,
                source_language_name=source_lang_name,
                target_language_name=target_lang_name,
@@ -495,41 +461,29 @@ def translate_text(text, source_lang_code, target_lang_code):
 
 def narrate_story(story_topic, lang_code="en"):
     """Narrates a mythological story using a translated prompt and online search results."""
-    # First try to find real stories online
     search_results = search_story_online(story_topic, lang_code)
     
-    # Include search results in the prompt if found
     context = ""
     if search_results:
         context = f"\n\nRelevant sources found:\n" + "\n".join(search_results[:3])
-    
-    # Get the story narration prompt template FOR THE TARGET LANGUAGE
+
     prompt = t("prompt_narrate_story", lang_code, story_topic=story_topic)
     
-    # Add context to prompt if available
     if context:
         prompt = f"{prompt}\n\nConsider these relevant sources for authenticity:{context}"
-    
-    # Call the Gemini API to generate the story in the target language
     return get_gemini_response(prompt)
 
 def get_educational_insights(topic, lang_code="en"):
     """Provides educational insights using a translated prompt and online search results."""
-    # Find relevant online sources
     search_results = search_insight_online(topic, lang_code)
     context = ""
     if search_results:
         context = f"\n\nRelevant sources found:\n" + "\n".join(search_results[:3])
         print(f"Adding context to insights prompt from search results.")
-
-    # Get the insights prompt template FOR THE TARGET LANGUAGE (lang_code)
     prompt = t("prompt_get_insights", lang_code, topic=topic)
 
-    # Add context if available
     if context:
         prompt = f"{prompt}\n\nPlease use the following sources for reference if helpful:{context}"
-
-    # Call the Gemini API to generate the educational insights in the target language
     return get_gemini_response(prompt)
 
 def get_story_analysis(story_topic, lang_code="en"):
@@ -537,9 +491,7 @@ def get_story_analysis(story_topic, lang_code="en"):
     Generates the story's message/moral using the Gemini API.
     Uses the prompt asking only for the message in the target language.
     """
-    # Get the story analysis prompt template FOR THE TARGET LANGUAGE (lang_code)
     prompt = t("prompt_get_story_analysis", lang_code, story_topic=story_topic)
-    # Call the Gemini API to generate the message/moral in the target language
     return get_gemini_response(prompt)
 
 
@@ -717,8 +669,6 @@ def generate_pdf(story_title, story_pages):
                      pdf.multi_cell(0, 6, "[Content could not be added due to encoding issues]")
             else:
                  pdf.multi_cell(0, 6, "[Content could not be added due to unexpected error]")
-
-        # Ensure the story ends with "THE END." (case-insensitive check)
         if not plain_text_cleaned.strip().upper().endswith("THE END."):
             pdf.ln(10) 
             try:
@@ -729,15 +679,10 @@ def generate_pdf(story_title, story_pages):
             print("Appended 'THE END.' to the PDF content.")
 
     try:
-        # Create a temporary file to save the PDF
         temp_file = os.path.join(os.getcwd(), f"temp_{int(time.time())}.pdf")
         pdf.output(temp_file)
-        
-        # Read the temporary file into BytesIO
         with open(temp_file, 'rb') as f:
             pdf_bytes = BytesIO(f.read())
-        
-        # Delete the temporary file
         try:
             os.remove(temp_file)
         except Exception as e:
@@ -751,7 +696,6 @@ def generate_pdf(story_title, story_pages):
         pdf_error.set_font('Arial', '', 12)
         pdf_error.cell(0, 10, f"Error generating PDF: {e}", 0, 1)
         
-        # Use the same temporary file approach for error PDF
         temp_error_file = os.path.join(os.getcwd(), f"temp_error_{int(time.time())}.pdf")
         pdf_error.output(temp_error_file)
         
@@ -785,48 +729,38 @@ def get_glossary_for_story(_story_content, _lang_code="en"):
                story_content=_story_content,
                language_name=lang_name)
 
-    # Call the Gemini API to get glossary terms in the target language
     response_text = get_gemini_response(prompt)
     print(f"--- Glossary Raw Response ({_lang_code}) ---\n{response_text}\n--------------------------------------") # ADDED: Log raw response
 
-    # Check if the response is empty, an error, or explicitly 'NONE'
     if not response_text or is_error_message(response_text) or response_text.strip().upper() == 'NONE':
         print(f"Glossary fetch: No terms found or error for lang '{_lang_code}'. Response: '{response_text}'")
-        return {} # Return empty dictionary indicating no terms or an error
+        return {} 
 
-    # Parse the response text to extract terms and definitions
     glossary = {}
     lines = response_text.strip().split('\n')
-    print(f"--- Parsing Glossary Response ({_lang_code}) ---") # DEBUG
+    print(f"--- Parsing Glossary Response ({_lang_code}) ---")
     for line in lines:
-        # Split each line at the first colon
         parts = line.strip().split(':', 1)
         if len(parts) == 2:
             term = parts[0].strip()
             definition = parts[1].strip()
-            # Add to glossary if both term and definition are valid
             if term and definition:
-                print(f"  -> Parsed Term: {term}, Definition: {definition}") # DEBUG
+                print(f"  -> Parsed Term: {term}, Definition: {definition}") 
                 glossary[term] = definition
         else:
-            # Log a warning if a line couldn't be parsed
-            print(f"  -> Warning: Could not parse glossary line: '{line}'") # DEBUG
+            print(f"  -> Warning: Could not parse glossary line: '{line}'")
 
-    # Check if parsing yielded any terms
     if not glossary:
-        print(f"--- Glossary Parsing Result ({_lang_code}): FAILED to parse any terms --- ") # MODIFIED: Clearer log
-        return {} # Return empty if parsing failed
+        print(f"--- Glossary Parsing Result ({_lang_code}): FAILED to parse any terms --- ") 
+        return {}
 
-    # Log success and the number of terms extracted
-    print(f"--- Glossary Parsing Result ({_lang_code}): Successfully parsed {len(glossary)} terms --- ") # MODIFIED: Clearer log
+    print(f"--- Glossary Parsing Result ({_lang_code}): Successfully parsed {len(glossary)} terms --- ")
     return glossary
 
 # --- Streamlit App UI ---
 def main():
     """Main function to run the Streamlit application."""
-    # --- Page Configuration (Apply Book Style CSS) ---
     st.set_page_config(layout="wide", page_title="Mongolian Mythology Explorer")
-    # Inject CSS (ensure this is correct and doesn't interfere)
     st.markdown("""
         <style>
         /* --- Book Page Styles (User Provided - Keep as is) --- */
@@ -882,30 +816,23 @@ def main():
         </style>
     """, unsafe_allow_html=True)
 
-
-    # --- Language Selection (Moved from Sidebar to Main Area) ---
-    # Initialize session state for language code if it doesn't exist
     if "lang_code" not in st.session_state:
-        st.session_state.lang_code = "en" # Default to English
+        st.session_state.lang_code = "en" 
 
-    # Use columns to place the language selector next to the title
-    col1_title, col2_lang_selector = st.columns([0.8, 0.2]) # Adjust ratio as needed
+    col1_title, col2_lang_selector = st.columns([0.8, 0.2])
 
     with col1_title:
-        # Display the app title (will be translated based on current session state lang_code)
         st.title(t("app_title", st.session_state.lang_code))
 
     with col2_lang_selector:
-        # Language selector using st.radio
         selected_lang = st.radio(
-            label=t("language_select_radio_label", st.session_state.lang_code), # Use translated label
+            label=t("language_select_radio_label", st.session_state.lang_code),
             options=["en", "mn"],
-            # FIX: Use correct keys "lang_english" and "lang_mongolian"
             format_func=lambda x: t("lang_english" if x == "en" else "lang_mongolian", st.session_state.lang_code),
-            key="language_selector_main", # Unique key
-            horizontal=True, # Display horizontally
-            index=0 if st.session_state.lang_code == "en" else 1, # Set default based on current state
-            label_visibility="collapsed" # Hide the label visually
+            key="language_selector_main", 
+            horizontal=True, 
+            index=0 if st.session_state.lang_code == "en" else 1,
+            label_visibility="collapsed"
         )
 
         # --- Handle Language Change ---
@@ -914,17 +841,13 @@ def main():
             source_lang = st.session_state.lang_code
             target_lang = selected_lang
             print(f"Translating content from: {source_lang} -> To: {target_lang}")
-
-            # FIX: Use correct keys for language names
             target_lang_key = "lang_english" if target_lang == "en" else "lang_mongolian"
-            # Get name in the *target* language for spinner
             target_lang_name = t(target_lang_key, target_lang) 
 
             with st.spinner(f"Translating content to {target_lang_name}... Please wait."):
-                # Function to safely translate text, returning original on error
                 def safe_translate(text, s_lang, t_lang, context=""):
                     if not text or not isinstance(text, str):
-                        return text # Return non-strings or empty strings as is
+                        return text 
                     print(f"Translating {context}: '{text[:50]}...' from {s_lang} to {t_lang}")
                     translated = translate_text(text, s_lang, t_lang)
                     if translated and not is_error_message(translated):
@@ -932,9 +855,7 @@ def main():
                         return translated
                     else:
                         print(f" -> Warning: Failed to translate {context}. Error: {translated}. Keeping original.")
-                        return text # Keep original on failure
-
-                # --- Translate relevant session state items ---
+                        return text 
 
                 # 1. Story Title
                 st.session_state.selected_story_title = safe_translate(
@@ -950,8 +871,7 @@ def main():
                     ]
                     st.session_state.story_pages = translated_pages
                     st.session_state.story_content = "\\n\\n".join(translated_pages)
-                    st.session_state.story_language = target_lang # Update story language marker
-                    # Clear glossary as terms/definitions might mismatch after translation
+                    st.session_state.story_language = target_lang 
                     st.session_state.story_glossary_data = None
                     st.session_state.glossary_terms_for_display = {}
                     st.session_state.glossary_loading_error = False
@@ -972,7 +892,7 @@ def main():
                     st.session_state.insight_content = safe_translate(
                          st.session_state.insight_content, source_lang, target_lang, "Insight Content"
                     )
-                    st.session_state.insight_language = target_lang # Update insight language marker
+                    st.session_state.insight_language = target_lang 
 
                 # 6. Favorites (Titles)
                 if st.session_state.favorites:
@@ -993,7 +913,7 @@ def main():
                          translated_bookmarks.append({'title': translated_title, 'page': page})
                      st.session_state.bookmarks = translated_bookmarks
 
-                # 8. Glossary Definitions (Keep terms original)
+                # 8. Glossary Definitions
                 if st.session_state.glossary_terms_for_display:
                      print("Translating glossary definitions...")
                      translated_glossary = {
@@ -1002,20 +922,12 @@ def main():
                      }
                      st.session_state.glossary_terms_for_display = translated_glossary
 
-                # 9. Chat History - SKIP TRANSLATION
+                # 9. Chat History
                 if st.session_state.chat_history:
                     print("Skipping.")
-                    # Chat history remains in its original language(s)
-
-            # Update the main language code *after* translations are done
             st.session_state.lang_code = target_lang 
-            
-            # No explicit rerun needed, Streamlit handles it. Avoids clearing state.
-            print("--- In-place translation finished ---")
 
-    # --- Get current language code AFTER potential translation ---
     lang_code = st.session_state.lang_code
-    # --- Initialize Other Session State Variables ---
     default_states = {
         'selected_story_title': None,
         'story_content': "", 
@@ -1028,7 +940,7 @@ def main():
         'insight_content': "", 
         'insight_language': lang_code,
         'current_insight_topic': None, 
-        'insight_image_url': None, # Added for insight image
+        'insight_image_url': None, 
         'show_share_options': False, 
         'favorites': [], 
         'bookmarks': [], 
@@ -1038,38 +950,33 @@ def main():
     }
     for key, default_value in default_states.items():
         st.session_state.setdefault(key, default_value)
-    # --- Check if Model is Available ---
     if not model:
         st.error("Gemini model could not be initialized. Please check your API key configuration at the top.")
         st.stop() 
-    # --- Sidebar (Now used for Favorites, Bookmarks, Glossary) ---
     with st.sidebar:
-        # Header for the sidebar section
-        st.header(t("sidebar_favorites_header", lang_code)) # Use translated header
+        st.header(t("sidebar_favorites_header", lang_code)) 
 
         # Display Favorite Stories
         st.subheader(t("favorites_subheader", lang_code))
         if not st.session_state.favorites:
             st.caption(t("no_favorites", lang_code))
         else:
-            favorites_copy = st.session_state.favorites[:] # Iterate over a copy
+            favorites_copy = st.session_state.favorites[:]
             for i, fav_title in enumerate(favorites_copy):
                 fav_key_base = f"fav_{i}_{fav_title[:10]}"
                 cols_fav = st.columns([0.8, 0.2])
                 with cols_fav[0]:
                      if st.button(f"{fav_title}", key=f"{fav_key_base}_read", help=t("go_to_story_button", lang_code), use_container_width=True):
                          print(f"Navigating to favorite story: {fav_title}")
-                         # Reset state before navigating
                          st.session_state.story_glossary_data = None
                          st.session_state.glossary_terms_for_display = {}
                          st.session_state.glossary_loading_error = False
                          st.session_state.current_page = 0
-                         st.session_state.story_content = "" # Force reload
+                         st.session_state.story_content = "" 
                          st.session_state.story_pages = []
                          st.session_state.story_analysis_content = ""
                          st.session_state.show_story_analysis = False
                          st.session_state.selected_story_title = fav_title
-                         # Set story language based on current UI lang when navigating from favs
                          st.session_state.story_language = lang_code
                          st.rerun()
                 with cols_fav[1]:
@@ -1084,30 +991,28 @@ def main():
         if not st.session_state.bookmarks:
             st.caption(t("no_bookmarks", lang_code))
         else:
-            bookmarks_copy = st.session_state.bookmarks[:] # Iterate copy
+            bookmarks_copy = st.session_state.bookmarks[:] 
             for i, bookmark in enumerate(bookmarks_copy):
                 bm_title = bookmark.get('title', 'Unknown Title')
-                bm_page = bookmark.get('page', 0) # 0-based index
+                bm_page = bookmark.get('page', 0) 
                 bm_key_base = f"bm_{i}_{bm_title[:10]}_{bm_page}"
                 cols_bm = st.columns([0.8, 0.2])
                 with cols_bm[0]:
-                     button_label = f"{bm_title[:25]}... (P.{bm_page + 1})" # Display 1-based page
+                     button_label = f"{bm_title[:25]}... (P.{bm_page + 1})" 
                      if st.button(button_label, key=f"{bm_key_base}_goto", help=t("go_to_page_button", lang_code, page=bm_page + 1), use_container_width=True):
                          print(f"Navigating to bookmark: {bm_title}, Page: {bm_page + 1}")
-                         # Reset content only if switching stories
                          if st.session_state.selected_story_title != bm_title:
                              print("Switching stories via bookmark, resetting content...")
                              st.session_state.story_glossary_data = None
                              st.session_state.glossary_terms_for_display = {}
                              st.session_state.glossary_loading_error = False
-                             st.session_state.story_content = "" # Force reload
+                             st.session_state.story_content = "" 
                              st.session_state.story_pages = []
                              st.session_state.story_analysis_content = ""
                              st.session_state.show_story_analysis = False
-                             # Set story language based on current UI lang
                              st.session_state.story_language = lang_code
                          st.session_state.selected_story_title = bm_title
-                         st.session_state.current_page = bm_page # Set 0-based index
+                         st.session_state.current_page = bm_page
                          st.rerun()
                 with cols_bm[1]:
                      if st.button("🗑️", key=f"{bm_key_base}_remove", help=t("remove_bookmark_button", lang_code), use_container_width=True):
@@ -1139,7 +1044,6 @@ def main():
     tab_keys = ["tab_chatbot", "tab_stories", "tab_insights"]
     tab_labels = [t(key, lang_code) for key in tab_keys]
 
-    # Create the tabs
     try:
         tab1, tab2, tab3 = st.tabs(tab_labels)
     except Exception as e:
@@ -1170,14 +1074,7 @@ def main():
         if user_input:
             st.session_state.chat_history.append({"role": "user", "content": user_input})
             print(f"User input appended to chat history: {user_input}")
-
-            # --- Prepare for API Call ---
-            # Get the specific prompt template based on the UI language 
-            # This template contains the core instructions for this turn
             chatbot_prompt = t("chatbot_prompt_template", lang_code, user_input=user_input)
-            
-            # --- Construct API History ---
-            # System instruction: Strongly focused on Mongolian Mythology perspective
             system_instruction = (
                 f"You are an expert assistant specializing *exclusively* in Mongolian Mythology. "
                 f"Your primary function is to answer questions only through the lens of Mongolian myths, legends, and folklore. "
@@ -1246,8 +1143,6 @@ def main():
     # --- Tab 2: Stories ---
     with tab2:
         st.header(t("stories_header", lang_code))
-
-        # === Story Viewing View ===
         if st.session_state.selected_story_title:
             current_title = st.session_state.selected_story_title
             print(f"--- Entering Story View ---")
@@ -1256,10 +1151,9 @@ def main():
             print(f"Expected Story Lang (from state): {st.session_state.story_language}")
             print(f"Story Content Exists: {bool(st.session_state.story_content)}")
 
-            # --- Load Story Content & Glossary ---
             needs_loading = (
                 not st.session_state.story_content or
-                st.session_state.story_language != lang_code # Check if UI lang changed
+                st.session_state.story_language != lang_code 
             )
             if needs_loading:
                  print(f"--- Loading Required ---")
@@ -1280,7 +1174,7 @@ def main():
                         st.session_state.glossary_loading_error = False
                         st.session_state.story_analysis_content = ""
                         st.session_state.show_story_analysis = False
-                        # Fetch Glossary
+                        
                         print(f"Fetching glossary for '{current_title}' in {lang_code}...")
                         glossary_data = get_glossary_for_story(narrated_content, lang_code)
                         if glossary_data is None:
@@ -1292,7 +1186,6 @@ def main():
                              st.session_state.story_glossary_data = glossary_data
                              st.session_state.glossary_loading_error = False
                              print(f"Loaded {len(glossary_data)} glossary terms for '{current_title}'.")
-                        # Paginate
                         print("Paginating story content...")
                         paragraphs = narrated_content.split('\n\n')
                         current_page_text_list = []
@@ -1315,8 +1208,6 @@ def main():
                                 current_length += para_len
                             if is_last_paragraph and current_page_text_list:
                                 st.session_state.story_pages.append("\n\n".join(current_page_text_list))
-                        
-                        # Ensure the story ends with "THE END." (case-insensitive check)
                         if st.session_state.story_pages and not st.session_state.story_pages[-1].strip().upper().endswith("THE END."):
                              st.session_state.story_pages[-1] += "\n\nTHE END."
                              print("Appended 'THE END.' to the last page of the story.")
@@ -1381,12 +1272,11 @@ def main():
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown("<br>", unsafe_allow_html=True)
 
-                # --- Navigation Controls ---
                 nav_cols = st.columns([1, 3, 1])
-                with nav_cols[0]: # Prev
+                with nav_cols[0]: 
                     if st.button("⬅️ Previous", key="prev_page", use_container_width=True, disabled=(st.session_state.current_page == 0)):
                         st.session_state.current_page -= 1; st.rerun()
-                with nav_cols[1]: # Selector
+                with nav_cols[1]:
                     page_opts = list(range(total_book_pages))
                     def fmt_page(idx): return "Title Page" if idx == 0 else f"Page {idx + 1}"
                     sel_page = st.selectbox("Jump:", page_opts, format_func=fmt_page, index=st.session_state.current_page, key="page_selector", label_visibility="collapsed")
@@ -1412,7 +1302,7 @@ def main():
                     can_bm = st.session_state.current_page > 0
                     bm_lbl = t("bookmark_page_button", lang_code)
                     if can_bm:
-                        page_idx = st.session_state.current_page # 0-based index for internal storage
+                        page_idx = st.session_state.current_page 
                         bm_exists = any(b.get('title') == current_title and b.get('page') == page_idx for b in st.session_state.bookmarks)
                         bm_disabled = bm_exists
                         bm_help = "Page already bookmarked" if bm_disabled else "Bookmark this page"
@@ -1430,7 +1320,7 @@ def main():
                         st.session_state.show_story_analysis = not st.session_state.show_story_analysis
                         if st.session_state.show_story_analysis and not st.session_state.story_analysis_content:
                             with st.spinner(t("story_message_loading", lang_code)):
-                                msg_res = get_story_analysis(current_title, st.session_state.story_language) # Use story lang
+                                msg_res = get_story_analysis(current_title, st.session_state.story_language) 
                                 if msg_res and not is_error_message(msg_res): st.session_state.story_analysis_content = msg_res
                                 else: st.warning(msg_res or "Could not get message."); st.session_state.story_analysis_content = ""; st.session_state.show_story_analysis = False
                         st.rerun()
@@ -1512,33 +1402,29 @@ def main():
                 if clean_topic:
                     topic_changed = st.session_state.current_insight_topic != clean_topic
                     lang_changed = st.session_state.insight_language != lang_code
-                    # Fetch if topic changed, lang changed, or no content exists
                     if topic_changed or lang_changed or not st.session_state.insight_content:
                         st.session_state.current_insight_topic = clean_topic
-                        st.session_state.insight_language = lang_code # Use current UI lang
+                        st.session_state.insight_language = lang_code 
                         st.session_state.insight_content = ""
-                        st.session_state.insight_image_url = None # Reset image URL
-                        
-                        # Fetch insights and image concurrently (or sequentially)
+                        st.session_state.insight_image_url = None 
                         with st.spinner(t("insights_gathering", lang_code, topic=clean_topic)):
-                            fetched_insight = get_educational_insights(clean_topic, lang_code) # Fetch in UI lang
+                            fetched_insight = get_educational_insights(clean_topic, lang_code)
                             fetched_image_url = search_image_online(clean_topic, lang_code)
                             
                         if fetched_insight and not is_error_message(fetched_insight):
                              st.session_state.insight_content = fetched_insight
                         else: 
                             st.warning(fetched_insight or "Could not get insights.")
-                            st.session_state.insight_content = "" # Ensure content is empty on failure
+                            st.session_state.insight_content = ""
                             
                         if fetched_image_url:
                             st.session_state.insight_image_url = fetched_image_url
                         else:
                             print("No image found for insight topic.")
-                            st.session_state.insight_image_url = None # Ensure None if not found
+                            st.session_state.insight_image_url = None 
                             
-                        st.rerun() # Rerun after fetching both
+                        st.rerun() 
                 else: 
-                    # Clear insights if topic is empty
                     st.session_state.current_insight_topic = None
                     st.session_state.insight_content = ""
                     st.session_state.insight_image_url = None
@@ -1548,33 +1434,15 @@ def main():
         if st.session_state.current_insight_topic and st.session_state.insight_content:
             st.subheader(t("insights_subheader", lang_code, topic=st.session_state.current_insight_topic))
             
-            # Display image if available
             if st.session_state.insight_image_url:
                 try:
-                    # Add caption for context
                     image_caption = f"Image related to {st.session_state.current_insight_topic}"
                     st.image(st.session_state.insight_image_url, caption=image_caption, use_column_width=True)
                 except Exception as img_err:
                     st.warning(f"Could not load image: {img_err}")
                     print(f"Error loading image URL {st.session_state.insight_image_url}: {img_err}")
-            
-            # Display insight text
             insight_area = st.container(border=True)
             insight_area.markdown(st.session_state.insight_content)
-            
-            # --- Translation Button (Optional) ---
-            # (Keep or remove based on previous decision)
-            # source_insight_lang = st.session_state.insight_language
-            # target_insight_lang = "mn" if source_insight_lang == "en" else "en"
-            # target_insight_lang_key = "lang_english" if target_insight_lang == "en" else "lang_mongolian"
-            # target_insight_name = t(target_insight_lang_key, lang_code)
-            # insight_trans_lbl = t("translate_button", lang_code, lang_name=target_insight_name)
-            # if st.button(insight_trans_lbl, key=f"translate_insight_{st.session_state.current_insight_topic[:10]}"):
-            #     with st.spinner(f"Translating insights to {target_insight_name}..."):
-            #         trans_insight = translate_text(st.session_state.insight_content, source_insight_lang, target_insight_lang)
-            #     if trans_insight and not is_error_message(trans_insight):
-            #         st.session_state.insight_content = trans_insight; st.session_state.insight_language = target_insight_lang; st.rerun()
-            #     else: st.warning(trans_insight or "Could not translate insights.")
 
 from googlesearch import search
 
@@ -1589,12 +1457,11 @@ def search_story_online(story_title, lang_code="en"):
         search_query = f"монгол домог үлгэр {story_title}"
     
     try:
-        # Get first 5 search results
         search_results = list(search(
             search_query,
             num_results=5,
             lang=lang_code[:2],
-            sleep_interval=2  # Be nice to Google
+            sleep_interval=2 
         ))
         print(f"Found {len(search_results)} URLs for story search")
         return search_results
@@ -1608,13 +1475,12 @@ def search_insight_online(insight_topic, lang_code="en"):
     Returns a list of relevant search results (URLs).
     """
     print(f"Searching online for insight topic: {insight_topic}")
-    # More general query for insights
     search_query = f"mongolian mythology {insight_topic} explanation significance"
     if lang_code == "mn":
         search_query = f"монгол домог {insight_topic} тайлбар утга учир"
     
     try:
-        # Get first 5 search results
+
         search_results = list(search(
             search_query,
             num_results=5,
@@ -1633,35 +1499,26 @@ def search_image_online(topic, lang_code="en"):
     Returns the first potential image URL found or None.
     """
     print(f"Searching online for image related to: {topic}")
-    # Query specifically for images
     search_query = f"mongolian mythology {topic} image illustration art"
     if lang_code == "mn":
         search_query = f"монгол домог {topic} зураг дүрслэл урлаг"
 
     try:
-        # Use stop=1 as we only need the first likely image result
-        # Use pause to be respectful
-        # TLD can help localize results slightly better
         tld = "mn" if lang_code == "mn" else "com"
         potential_urls = list(search(
             search_query,
-            num_results=5, # Check a few results 
+            num_results=5,
             lang=lang_code[:2],
             tld=tld,
             sleep_interval=2
         ))
-        
-        # Basic check for image file extensions
+
         for url in potential_urls:
             if isinstance(url, str) and any(url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]):
                 print(f"Found potential image URL: {url}")
-                return url # Return the first likely image URL
-        
-        # If no direct image link, return the first result page (less ideal)
+                return url
         if potential_urls:
-             print(f"No direct image link found, returning first result page: {potential_urls[0]}")
-             # return potential_urls[0] # Disabled for now, only return direct links
-        
+             print(f"No direct image link found, returning first result page: {potential_urls[0]}")        
         print("No suitable image URL found.")
         return None
     except Exception as e:
@@ -1670,21 +1527,14 @@ def search_image_online(topic, lang_code="en"):
 
 def get_educational_insights(topic, lang_code="en"):
     """Provides educational insights using a translated prompt and online search results."""
-    # Find relevant online sources
     search_results = search_insight_online(topic, lang_code)
     context = ""
     if search_results:
         context = f"\n\nRelevant sources found:\n" + "\n".join(search_results[:3])
         print(f"Adding context to insights prompt from search results.")
-
-    # Get the insights prompt template FOR THE TARGET LANGUAGE (lang_code)
     prompt = t("prompt_get_insights", lang_code, topic=topic)
-
-    # Add context if available
     if context:
         prompt = f"{prompt}\n\nPlease use the following sources for reference if helpful:{context}"
-
-    # Call the Gemini API to generate the educational insights in the target language
     return get_gemini_response(prompt)
 
 if __name__ == "__main__":
