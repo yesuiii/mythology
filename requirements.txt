@@ -2,3 +2,5 @@ streamlit
 google-generativeai
 fpdf
 html2text
+googlesearch-python
+
