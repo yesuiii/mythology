@@ -1,10 +1,10 @@
-Mongolian Mythology Explorer
+## Mongolian Mythology Explorer
 
 What the Project Does
 
 The Mongolian Mythology Explorer is a Streamlit web application designed to provide an interactive and informative journey into the rich world of Mongolian traditional folk tales and mythology. 
-
 The application offers several key features:
+
 Storytelling: Explore a collection of Mongolian traditional folk tales.
 
 Glossary: Discover and understand specific terms within the stories through an integrated glossary.
